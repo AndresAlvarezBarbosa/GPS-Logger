@@ -172,6 +172,15 @@ struct GPXDropZone: View {
                 .strokeBorder(isTargeted ? Color.accentColor : .clear, lineWidth: 2)
         )
         .animation(.easeInOut(duration: 0.15), value: isTargeted)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if let url = viewModel.gpxURL {
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            } else {
+                browseForGPX()
+            }
+        }
+        .help(viewModel.gpxURL != nil ? "Click to reveal in Finder" : "Click to browse for a .gpx file")
         .onDrop(of: [.fileURL], isTargeted: $isTargeted) { providers in
             for provider in providers {
                 _ = provider.loadObject(ofClass: NSURL.self) { item, _ in
@@ -183,12 +192,28 @@ struct GPXDropZone: View {
             return true
         }
     }
+
+    private func browseForGPX() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.init(filenameExtension: "gpx")!]
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Open"
+        panel.message = "Select a GPX track file"
+        if panel.runModal() == .OK, let url = panel.url {
+            viewModel.loadGPX(from: url)
+        }
+    }
 }
 
 // MARK: - Image Import Card
 
 struct ImageImportCard: View {
     @ObservedObject var viewModel: GeoTagViewModel
+    @State private var isTargeted = false
+
+    private static let imageExtensions: Set<String> = [
+        "jpg", "jpeg", "tiff", "tif", "raw", "cr2", "cr3", "nef", "arw", "dng", "heic"
+    ]
 
     var body: some View {
         Button(action: importImages) {
@@ -197,10 +222,12 @@ struct ImageImportCard: View {
                       ? "photo.badge.plus.fill"
                       : "photo.stack.fill")
                     .font(.title2)
-                    .foregroundStyle(viewModel.images.isEmpty ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint))
+                    .foregroundStyle(viewModel.images.isEmpty
+                        ? (isTargeted ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                        : AnyShapeStyle(.tint))
 
                 Text(viewModel.images.isEmpty
-                     ? "Add Images"
+                     ? (isTargeted ? "Drop Images" : "Add Images")
                      : "\(viewModel.images.count) images")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -209,6 +236,28 @@ struct ImageImportCard: View {
         }
         .buttonStyle(.plain)
         .glassEffect(in: .rect(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(isTargeted ? Color.accentColor : .clear, lineWidth: 2)
+        )
+        .animation(.easeInOut(duration: 0.15), value: isTargeted)
+        .onDrop(of: [.fileURL], isTargeted: $isTargeted) { providers in
+            var collected: [URL] = []
+            let group = DispatchGroup()
+            for provider in providers {
+                group.enter()
+                _ = provider.loadObject(ofClass: NSURL.self) { item, _ in
+                    defer { group.leave() }
+                    guard let url = item as? URL,
+                          Self.imageExtensions.contains(url.pathExtension.lowercased()) else { return }
+                    collected.append(url)
+                }
+            }
+            group.notify(queue: .main) {
+                if !collected.isEmpty { viewModel.importImages(urls: collected) }
+            }
+            return true
+        }
     }
 
     private func importImages() {
@@ -263,6 +312,7 @@ struct ImageListView: View {
 
 struct ImageRowView: View {
     let image: ImageItem
+    @State private var isHovered = false
 
     var body: some View {
         HStack(spacing: 8) {
@@ -303,7 +353,14 @@ struct ImageRowView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
-        .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 8))
+        .background(isHovered ? AnyShapeStyle(.fill.secondary) : AnyShapeStyle(.fill.tertiary),
+                    in: RoundedRectangle(cornerRadius: 8))
+        .contentShape(Rectangle())
+        .onTapGesture {
+            NSWorkspace.shared.activateFileViewerSelecting([image.url])
+        }
+        .onHover { isHovered = $0 }
+        .help("Reveal in Finder")
     }
 }
 

@@ -68,6 +68,7 @@ class GeoTagViewModel: ObservableObject {
     @Published var isTagging = false
     @Published var statusMessage = ""
     @Published var gpxFilename = ""
+    @Published var gpxURL: URL? = nil
     @Published var timeOffsetHours: Int = 0
 
     // Used to trigger animated camera fly-to without requiring MKCoordinateRegion: Equatable.
@@ -94,6 +95,7 @@ class GeoTagViewModel: ObservableObject {
         let points = GPXParser.parse(url: url)
         trackPoints = points
         gpxFilename = url.lastPathComponent
+        gpxURL = url
         statusMessage = "Loaded \(points.count) track points"
         matchImages()
         fitMapToTrack()
@@ -158,6 +160,7 @@ class GeoTagViewModel: ObservableObject {
         trackPoints = []
         images = []
         gpxFilename = ""
+        gpxURL = nil
         statusMessage = ""
         mapFocusRegion = nil
         mapFocusCounter = 0
